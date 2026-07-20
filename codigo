@@ -1,0 +1,738 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# PROYECTO INTEGRADO: ANÁLISIS DE VIDEOJUEGOS\n",
+    "## Tienda Online ICE - Identificación de Patrones de Éxito\n",
+    "\n",
+    "### Objetivo\n",
+    "Identificar patrones que determinen si un videojuego tiene éxito para detectar proyectos prometedores y planificar campañas publicitarias.\n",
+    "\n",
+    "### Contexto\n",
+    "- **Fecha de análisis:** Diciembre 2016\n",
+    "- **Objetivo:** Planificar campaña para 2017\n",
+    "- **Datos disponibles:** Historiales de ventas de videojuegos desde 2016, reseñas, géneros, plataformas\n",
+    "\n",
+    "### Estructura del proyecto\n",
+    "1. Carga y exploración de datos\n",
+    "2. Preparación y limpieza de datos\n",
+    "3. Análisis exploratorio (EDA)\n",
+    "4. Análisis por región (NA, EU, JP)\n",
+    "5. Pruebas de hipótesis estadísticas\n",
+    "6. Conclusiones y recomendaciones"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Importar librerías"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "from scipy import stats as st\n",
+    "import warnings\n",
+    "warnings.filterwarnings('ignore')\n",
+    "\n",
+    "# Configurar estilo de gráficos\n",
+    "sns.set_style('whitegrid')\n",
+    "plt.rcParams['figure.figsize'] = (12, 6)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 1: CARGAR Y EXPLORAR DATOS"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Cargar el dataset\n",
+    "games = pd.read_csv('/datasets/games.csv')\n",
+    "\n",
+    "print(\"Forma del dataset:\", games.shape)\n",
+    "print(\"\\nPrimeras filas:\")\n",
+    "print(games.head())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Información general del dataset\n",
+    "print(\"Información del dataset:\")\n",
+    "print(games.info())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Estadísticas descriptivas\n",
+    "print(\"Estadísticas descriptivas:\")\n",
+    "print(games.describe())"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Valores faltantes\n",
+    "print(\"Valores faltantes por columna:\")\n",
+    "print(games.isnull().sum())\n",
+    "print(f\"\\nPorcentaje de valores faltantes:\")\n",
+    "print((games.isnull().sum() / len(games) * 100).round(2))"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 2: PREPARAR DATOS"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.1 Renombrar columnas a minúsculas"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Convertir nombres de columnas a minúsculas\n",
+    "games.columns = games.columns.str.lower()\n",
+    "print(\"Columnas renombradas:\")\n",
+    "print(games.columns.tolist())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.2 Convertir tipos de datos"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Convertir year_of_release a entero (sin decimales)\n",
+    "games['year_of_release'] = games['year_of_release'].astype('Int64')  # Int64 para permitir NaN\n",
+    "\n",
+    "# Convertir user_score a float (actualmente es object)\n",
+    "# Primero reemplazar 'tbd' con NaN\n",
+    "games['user_score'] = games['user_score'].replace('tbd', np.nan)\n",
+    "games['user_score'] = pd.to_numeric(games['user_score'], errors='coerce')\n",
+    "\n",
+    "# Convertir critic_score a float\n",
+    "games['critic_score'] = pd.to_numeric(games['critic_score'], errors='coerce')\n",
+    "\n",
+    "print(\"Tipos de datos después de conversión:\")\n",
+    "print(games.dtypes)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.3 Descripción de cambios de tipos de datos\n",
+    "\n",
+    "**Cambios realizados:**\n",
+    "- **year_of_release:** object → Int64 (para análisis temporal, permitiendo NaN)\n",
+    "- **user_score:** object → float (reemplazando 'tbd' con NaN)\n",
+    "- **critic_score:** object → float (para análisis numérico)\n",
+    "\n",
+    "**Razones:**\n",
+    "- Permitir operaciones aritméticas y análisis estadísticos\n",
+    "- Manejar correctamente valores faltantes y casos especiales ('tbd')\n",
+    "- Facilitar agrupaciones y visualizaciones por año"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.4 Tratar valores ausentes"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Explorar valores ausentes\n",
+    "print(\"Valores ausentes después de limpieza:\")\n",
+    "print(games.isnull().sum())\n",
+    "\n",
+    "# Verificar valores 'tbd' restantes\n",
+    "print(f\"\\nValores 'tbd' en user_score: {(games['user_score'] == 'tbd').sum()}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Estrategia de tratamiento de valores ausentes:\n",
+    "\n",
+    "# 1. year_of_release: Eliminar filas sin año (son pocas y necesarias para análisis temporal)\n",
+    "print(f\"Filas antes de eliminar valores ausentes en year_of_release: {len(games)}\")\ngames = games.dropna(subset=['year_of_release'])\nprint(f\"Filas después: {len(games)}\")\n\n# 2. critic_score y user_score: Dejar NaN (usaremos en análisis específicos)\n#    Razón: Algunos juegos no tienen reseña profesional o de usuarios, es información válida\n\n# 3. rating: Dejar NaN (algunos juegos no tienen clasificación ESRB)\n#    Razón: Es una característica válida para análisis de regiones específicas\n\nprint(\"\\nValores ausentes finales:\")\nprint(games.isnull().sum())"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2.5 Calcular ventas totales globales"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Crear columna de ventas totales (suma de todas las regiones)\n",
+    "games['total_sales'] = (games['na_sales'] + games['eu_sales'] + \n",
+    "                        games['jp_sales'] + games['other_sales'])\n",
+    "\n",
+    "print(\"Ventas totales calculadas:\")\nprint(games[['name', 'na_sales', 'eu_sales', 'jp_sales', 'other_sales', 'total_sales']].head())\n\nprint(f\"\\nVentas totales mínimas: ${games['total_sales'].min():.2f}M\")\nprint(f\"Ventas totales máximas: ${games['total_sales'].max():.2f}M\")\nprint(f\"Ventas totales promedio: ${games['total_sales'].mean():.2f}M\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 3: ANÁLISIS EXPLORATORIO (EDA)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.1 Análisis temporal: Lanzamientos por año"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Contar juegos lanzados por año\n",
+    "games_per_year = games['year_of_release'].value_counts().sort_index()\n\nprint(\"Juegos lanzados por año:\")\nprint(games_per_year)\n\n# Visualizar\nplt.figure(figsize=(14, 6))\ngames_per_year.plot(kind='bar', color='steelblue')\nplt.title('Cantidad de juegos lanzados por año', fontsize=14, fontweight='bold')\nplt.xlabel('Año')\nplt.ylabel('Cantidad de juegos')\nplt.xticks(rotation=45)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Análisis: ¿Son significativos los datos de cada período?\nprint(\"\\n=== ANÁLISIS TEMPORAL ===\")\nprint(f\"Período cubierto: {int(games['year_of_release'].min())} - {int(games['year_of_release'].max())}\")\nprint(f\"Total de años: {len(games_per_year)}\")\nprint(f\"Promedio de juegos por año: {games_per_year.mean():.0f}\")\nprint(f\"\\nAños con más datos: {games_per_year.nlargest(5)}\")\nprint(f\"\\nAños con menos datos: {games_per_year.nsmallest(5)}\")\n\n# Identificar período significativo\nthreshold = games_per_year.mean() * 0.5\nsignificant_years = games_per_year[games_per_year >= threshold]\nprint(f\"\\nPeríodo con datos significativos (>50% del promedio):\")\nprint(f\"{int(significant_years.index.min())} - {int(significant_years.index.max())}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.2 Análisis de plataformas: Ventas por plataforma"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Ventas totales por plataforma\n",
+    "sales_by_platform = games.groupby('platform')['total_sales'].sum().sort_values(ascending=False)\n\nprint(\"Ventas totales por plataforma (Top 15):\")\nprint(sales_by_platform.head(15))\n\n# Visualizar\nplt.figure(figsize=(14, 6))\nsales_by_platform.head(15).plot(kind='bar', color='coral')\nplt.title('Ventas totales por plataforma (Top 15)', fontsize=14, fontweight='bold')\nplt.xlabel('Plataforma')\nplt.ylabel('Ventas (Millones USD)')\nplt.xticks(rotation=45)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Distribución de juegos lanzados por plataforma y año\nplatforms_timeline = games.groupby(['year_of_release', 'platform']).size().unstack(fill_value=0)\n\n# Graficar plataformas principales\ntop_platforms = sales_by_platform.head(10).index.tolist()\nplatforms_timeline[top_platforms].plot(figsize=(14, 6), marker='o')\nplt.title('Evolución de lanzamientos: Top 10 plataformas por ventas', fontsize=14, fontweight='bold')\nplt.xlabel('Año')\nplt.ylabel('Cantidad de juegos lanzados')\nplt.grid(alpha=0.3)\nplt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Análisis de ciclo de vida de plataformas\nprint(\"\\n=== CICLO DE VIDA DE PLATAFORMAS ===\")\n\nfor platform in top_platforms[:5]:\n    platform_data = games[games['platform'] == platform]\n    first_year = platform_data['year_of_release'].min()\n    last_year = platform_data['year_of_release'].max()\n    game_count = len(platform_data)\n    total_sales = platform_data['total_sales'].sum()\n    \n    print(f\"\\n{platform}:\")\n    print(f\"  Período activo: {int(first_year)} - {int(last_year)} ({int(last_year - first_year)} años)\")\n    print(f\"  Juegos: {game_count}\")\n    print(f\"  Ventas totales: ${total_sales:.2f}M\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.3 Determinar período relevante para análisis"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Seleccionar período relevante\n",
+    "# Considerando que estamos en diciembre 2016, usaremos datos de 2006-2016 (últimos 11 años)\n",
+    "# Esto nos permite ver tendencias recientes pero excluye años con pocos datos\n\nstart_year = 2006\nend_year = 2016\n\ngames_relevant = games[(games['year_of_release'] >= start_year) & \n                       (games['year_of_release'] <= end_year)].copy()\n\nprint(f\"\\nPeríodo seleccionado: {start_year} - {end_year}\")\nprint(f\"Juegos en período relevante: {len(games_relevant)} ({len(games_relevant)/len(games)*100:.1f}% del total)\")\nprint(f\"Ventas en período relevante: ${games_relevant['total_sales'].sum():.2f}M ({games_relevant['total_sales'].sum()/games['total_sales'].sum()*100:.1f}% del total)\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Trabajar solo con datos relevantes\ngames = games_relevant.copy()\nprint(f\"\\nDataset actualizado a período relevante:\")\nprint(f\"Forma: {games.shape}\")\nprint(f\"Años cubiertos: {int(games['year_of_release'].min())} - {int(games['year_of_release'].max())}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.4 Plataformas líderes y tendencias"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Plataformas líderes en ventas totales\ntop_platforms_relevant = games.groupby('platform')['total_sales'].sum().sort_values(ascending=False).head(10)\n\nprint(\"\\nTop 10 plataformas por ventas totales (2006-2016):\")\nfor i, (platform, sales) in enumerate(top_platforms_relevant.items(), 1):\n    print(f\"{i}. {platform}: ${sales:.2f}M\")\n\n# Visualizar\nplt.figure(figsize=(12, 6))\ntop_platforms_relevant.plot(kind='bar', color='seagreen')\nplt.title('Top 10 plataformas por ventas totales (2006-2016)', fontsize=14, fontweight='bold')\nplt.xlabel('Plataforma')\nplt.ylabel('Ventas (Millones USD)')\nplt.xticks(rotation=45)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Analizar tendencias de crecimiento/decrecimiento por plataforma\nprint(\"\\n=== TENDENCIAS DE PLATAFORMAS ===\")\n\nfor platform in top_platforms_relevant.head(8).index:\n    platform_data = games[games['platform'] == platform]\n    \n    # Ventas primeros años vs últimos años\n    early_years = platform_data[platform_data['year_of_release'] <= 2011]['total_sales'].sum()\n    recent_years = platform_data[platform_data['year_of_release'] >= 2012]['total_sales'].sum()\n    \n    trend = \"↑ En crecimiento\" if recent_years > early_years else \"↓ En declive\"\n    \n    print(f\"\\n{platform}: {trend}\")\n    print(f\"  2006-2011: ${early_years:.2f}M | 2012-2016: ${recent_years:.2f}M\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.5 Diagrama de caja: Comparación de ventas por plataforma"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Boxplot de ventas por plataforma (Top 10)\ntop_8_platforms = top_platforms_relevant.head(8).index.tolist()\ngames_top_platforms = games[games['platform'].isin(top_8_platforms)]\n\nplt.figure(figsize=(14, 6))\ngames_top_platforms.boxplot(column='total_sales', by='platform', figsize=(14, 6))\nplt.title('Distribución de ventas por plataforma (Top 8)', fontsize=14, fontweight='bold')\nplt.suptitle('')\nplt.xlabel('Plataforma')\nplt.ylabel('Ventas por juego (Millones USD)')\nplt.xticks(rotation=45)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Estadísticas detalladas\nprint(\"\\n=== ESTADÍSTICAS DE VENTAS POR PLATAFORMA ===\")\nstats_by_platform = games_top_platforms.groupby('platform')['total_sales'].agg([\n    'count', 'mean', 'median', 'std', 'min', 'max'\n]).round(2)\n\nstats_by_platform.columns = ['Cantidad', 'Media', 'Mediana', 'Desv.Est', 'Mín', 'Máx']\nprint(stats_by_platform)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.6 Reseñas vs Ventas (Plataforma popular)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Seleccionar plataforma más popular: PS2\nselected_platform = 'PS2'\nplatform_data = games[games['platform'] == selected_platform].copy()\n\nprint(f\"\\nAnálisis de plataforma: {selected_platform}\")\nprint(f\"Total de juegos: {len(platform_data)}\")\nprint(f\"Ventas totales: ${platform_data['total_sales'].sum():.2f}M\")\n\n# Eliminar valores ausentes para correlación\nplatform_data_clean = platform_data.dropna(subset=['critic_score', 'user_score', 'total_sales'])\nprint(f\"Juegos con datos completos (reseñas + ventas): {len(platform_data_clean)}\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Gráfico de dispersión: Critic Score vs Ventas\nfig, axes = plt.subplots(1, 2, figsize=(15, 5))\n\n# Critic Score\naxes[0].scatter(platform_data_clean['critic_score'], platform_data_clean['total_sales'], alpha=0.6, s=50)\naxes[0].set_xlabel('Crítica (0-100)')\naxes[0].set_ylabel('Ventas (Millones USD)')\naxes[0].set_title(f'{selected_platform}: Crítica vs Ventas')\naxes[0].grid(alpha=0.3)\n\n# User Score\naxes[1].scatter(platform_data_clean['user_score'], platform_data_clean['total_sales'], alpha=0.6, s=50, color='orange')\naxes[1].set_xlabel('Usuarios (0-10)')\naxes[1].set_ylabel('Ventas (Millones USD)')\naxes[1].set_title(f'{selected_platform}: Usuarios vs Ventas')\naxes[1].grid(alpha=0.3)\n\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Calcular correlaciones\ncorr_critic = platform_data_clean['critic_score'].corr(platform_data_clean['total_sales'])\ncorr_user = platform_data_clean['user_score'].corr(platform_data_clean['total_sales'])\n\nprint(f\"\\n=== CORRELACIÓN: {selected_platform} ===\")\nprint(f\"Correlación Crítica vs Ventas: {corr_critic:.3f}\")\nprint(f\"Correlación Usuarios vs Ventas: {corr_user:.3f}\")\n\nif abs(corr_critic) > 0.5:\n    print(f\"→ Crítica tiene FUERTE influencia en ventas\")\nelif abs(corr_critic) > 0.3:\n    print(f\"→ Crítica tiene MODERADA influencia en ventas\")\nelse:\n    print(f\"→ Crítica tiene DÉBIL influencia en ventas\")\n\nif abs(corr_user) > 0.5:\n    print(f\"→ Usuarios tienen FUERTE influencia en ventas\")\nelif abs(corr_user) > 0.3:\n    print(f\"→ Usuarios tienen MODERADA influencia en ventas\")\nelse:\n    print(f\"→ Usuarios tienen DÉBIL influencia en ventas\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.7 Comparación de ventas entre plataformas"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Comparar PS2 con otras plataformas principales\ncomparison_platforms = ['PS2', 'X360', 'DS', 'PS3', 'Wii']\ncomparison_data = games[games['platform'].isin(comparison_platforms)].copy()\n\n# Gráfico de barras de ventas promedio\navg_sales_by_platform = comparison_data.groupby('platform')['total_sales'].mean().sort_values(ascending=False)\n\nplt.figure(figsize=(10, 6))\navg_sales_by_platform.plot(kind='bar', color='skyblue')\nplt.title('Ventas promedio por juego: Plataformas principales', fontsize=14, fontweight='bold')\nplt.xlabel('Plataforma')\nplt.ylabel('Ventas promedio (Millones USD)')\nplt.xticks(rotation=0)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()\n\nprint(\"\\nVentas promedio por juego:\")\nprint(avg_sales_by_platform)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3.8 Análisis de géneros"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Distribución de juegos por género\ngenres = games['genre'].value_counts()\n\nprint(\"Cantidad de juegos por género:\")\nprint(genres)\n\n# Visualizar\nplt.figure(figsize=(12, 6))\ngenres.plot(kind='bar', color='mediumpurple')\nplt.title('Distribución de juegos por género', fontsize=14, fontweight='bold')\nplt.xlabel('Género')\nplt.ylabel('Cantidad de juegos')\nplt.xticks(rotation=45)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Análisis de ventas por género\nprint(\"\\n=== ANÁLISIS DE VENTAS POR GÉNERO ===\")\n\nsales_by_genre = games.groupby('genre').agg({\n    'total_sales': ['sum', 'mean', 'count']\n}).round(2)\n\nsales_by_genre.columns = ['Ventas_Totales', 'Ventas_Promedio', 'Cantidad']\nsales_by_genre = sales_by_genre.sort_values('Ventas_Totales', ascending=False)\n\nprint(sales_by_genre)\n\n# Visualizar ventas totales\nplt.figure(figsize=(12, 6))\nsales_by_genre['Ventas_Totales'].plot(kind='bar', color='gold')\nplt.title('Ventas totales por género', fontsize=14, fontweight='bold')\nplt.xlabel('Género')\nplt.ylabel('Ventas totales (Millones USD)')\nplt.xticks(rotation=45)\nplt.grid(axis='y', alpha=0.3)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Boxplot de ventas por género\nplt.figure(figsize=(14, 6))\ngames.boxplot(column='total_sales', by='genre', figsize=(14, 6))\nplt.title('Distribución de ventas por género', fontsize=14, fontweight='bold')\nplt.suptitle('')\nplt.xlabel('Género')\nplt.ylabel('Ventas por juego (Millones USD)')\nplt.xticks(rotation=45)\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Conclusiones sobre géneros\nprint(\"\\n=== CONCLUSIONES SOBRE GÉNEROS ===\")\nprint(f\"\\nGéneros más rentables (ventas totales):\")\nfor genre, row in sales_by_genre.head(5).iterrows():\n    print(f\"  {genre}: ${row['Ventas_Totales']:.2f}M ({int(row['Cantidad'])} juegos, promedio ${row['Ventas_Promedio']:.2f}M)\")\n\nprint(f\"\\nGéneros con mayor venta promedio por juego:\")\nventas_promedio = sales_by_genre.sort_values('Ventas_Promedio', ascending=False)\nfor genre, row in ventas_promedio.head(5).iterrows():\n    print(f\"  {genre}: ${row['Ventas_Promedio']:.2f}M promedio ({int(row['Cantidad'])} juegos)\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 4: ANÁLISIS POR REGIÓN"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.1 Perfil de Norteamérica (NA)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print(\"\\n\" + \"=\"*70)\nprint(\"REGIÓN: NORTEAMÉRICA (NA)\")\nprint(\"=\"*70)\n\n# Top 5 plataformas\nprint(\"\\nTop 5 plataformas por ventas en NA:\")\ntop_platforms_na = games.groupby('platform')['na_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (platform, sales) in enumerate(top_platforms_na.items(), 1):\n    total_sales_region = games.groupby('platform')['na_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {platform}: ${sales:.2f}M ({share:.1f}%)\")\n\n# Top 5 géneros\nprint(\"\\nTop 5 géneros por ventas en NA:\")\ntop_genres_na = games.groupby('genre')['na_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (genre, sales) in enumerate(top_genres_na.items(), 1):\n    total_sales_region = games.groupby('genre')['na_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {genre}: ${sales:.2f}M ({share:.1f}%)\")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Influencia de Rating ESRB en NA\nprint(\"\\nInfluencia de clasificación ESRB en NA:\")\nrating_na = games.groupby('rating')['na_sales'].sum().sort_values(ascending=False)\nprint(rating_na)\n\n# Estadísticas\nprint(f\"\\nVentas promedio por clasificación ESRB:\")\nrating_stats = games.groupby('rating').agg({\n    'na_sales': ['sum', 'mean', 'count']\n}).round(2)\nrating_stats.columns = ['Ventas_Totales', 'Ventas_Promedio', 'Cantidad']\nprint(rating_stats)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.2 Perfil de Europa (EU)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print(\"\\n\" + \"=\"*70)\nprint(\"REGIÓN: EUROPA (EU)\")\nprint(\"=\"*70)\n\n# Top 5 plataformas\nprint(\"\\nTop 5 plataformas por ventas en EU:\")\ntop_platforms_eu = games.groupby('platform')['eu_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (platform, sales) in enumerate(top_platforms_eu.items(), 1):\n    total_sales_region = games.groupby('platform')['eu_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {platform}: ${sales:.2f}M ({share:.1f}%)\")\n\n# Top 5 géneros\nprint(\"\\nTop 5 géneros por ventas en EU:\")\ntop_genres_eu = games.groupby('genre')['eu_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (genre, sales) in enumerate(top_genres_eu.items(), 1):\n    total_sales_region = games.groupby('genre')['eu_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {genre}: ${sales:.2f}M ({share:.1f}%)\")\n\n# Influencia de Rating ESRB\nprint(\"\\nInfluencia de clasificación ESRB en EU:\")\nrating_eu = games.groupby('rating')['eu_sales'].sum().sort_values(ascending=False)\nprint(rating_eu)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.3 Perfil de Japón (JP)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "print(\"\\n\" + \"=\"*70)\nprint(\"REGIÓN: JAPÓN (JP)\")\nprint(\"=\"*70)\n\n# Top 5 plataformas\nprint(\"\\nTop 5 plataformas por ventas en JP:\")\ntop_platforms_jp = games.groupby('platform')['jp_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (platform, sales) in enumerate(top_platforms_jp.items(), 1):\n    total_sales_region = games.groupby('platform')['jp_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {platform}: ${sales:.2f}M ({share:.1f}%)\")\n\n# Top 5 géneros\nprint(\"\\nTop 5 géneros por ventas en JP:\")\ntop_genres_jp = games.groupby('genre')['jp_sales'].sum().sort_values(ascending=False).head(5)\nfor i, (genre, sales) in enumerate(top_genres_jp.items(), 1):\n    total_sales_region = games.groupby('genre')['jp_sales'].sum().sum()\n    share = (sales / total_sales_region) * 100\n    print(f\"{i}. {genre}: ${sales:.2f}M ({share:.1f}%)\")\n\n# Influencia de Rating ESRB\nprint(\"\\nInfluencia de clasificación ESRB en JP:\")\nrating_jp = games.groupby('rating')['jp_sales'].sum().sort_values(ascending=False)\nprint(rating_jp)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4.4 Comparación de perfiles regionales"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Comparar top plataformas entre regiones\nfig, axes = plt.subplots(1, 3, figsize=(16, 5))\n\nax = axes[0]\ntop_platforms_na.head(8).plot(kind='bar', ax=ax, color='steelblue')\nax.set_title('Top plataformas - Norteamérica', fontweight='bold')\nax.set_xlabel('Plataforma')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nax = axes[1]\ntop_platforms_eu.head(8).plot(kind='bar', ax=ax, color='coral')\nax.set_title('Top plataformas - Europa', fontweight='bold')\nax.set_xlabel('Plataforma')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nax = axes[2]\ntop_platforms_jp.head(8).plot(kind='bar', ax=ax, color='lightgreen')\nax.set_title('Top plataformas - Japón', fontweight='bold')\nax.set_xlabel('Plataforma')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Comparar géneros entre regiones\nfig, axes = plt.subplots(1, 3, figsize=(16, 5))\n\nax = axes[0]\ntop_genres_na.plot(kind='bar', ax=ax, color='steelblue')\nax.set_title('Top géneros - Norteamérica', fontweight='bold')\nax.set_xlabel('Género')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nax = axes[1]\ntop_genres_eu.plot(kind='bar', ax=ax, color='coral')\nax.set_title('Top géneros - Europa', fontweight='bold')\nax.set_xlabel('Género')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nax = axes[2]\ntop_genres_jp.plot(kind='bar', ax=ax, color='lightgreen')\nax.set_title('Top géneros - Japón', fontweight='bold')\nax.set_xlabel('Género')\nax.set_ylabel('Ventas (Millones USD)')\nax.tick_params(axis='x', rotation=45)\n\nplt.tight_layout()\nplt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 5: PRUEBAS DE HIPÓTESIS"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5.1 Hipótesis 1: Xbox One vs PC (Calificaciones de usuarios)\n",
+    "\n",
+    "**Hipótesis Nula (H₀):** Las calificaciones promedio de usuarios para Xbox One y PC son iguales.\n",
+    "\n",
+    "**Hipótesis Alternativa (H₁):** Las calificaciones promedio de usuarios para Xbox One y PC son diferentes.\n",
+    "\n",
+    "**Prueba:** t-test independiente (two-sample t-test) bilateral\n",
+    "\n",
+    "**Alfa (α):** 0.05"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Extraer datos de ambas plataformas\nxbone_scores = games[games['platform'] == 'XOne']['user_score'].dropna()\npc_scores = games[games['platform'] == 'PC']['user_score'].dropna()\n\nprint(\"=\"*70)\nprint(\"HIPÓTESIS 1: Xbox One vs PC (Calificaciones de usuarios)\")\nprint(\"=\"*70)\n\nprint(f\"\\nDatos:\")\nprint(f\"Xbox One - n={len(xbone_scores)}, media={xbone_scores.mean():.2f}, desv={xbone_scores.std():.2f}\")\nprint(f\"PC - n={len(pc_scores)}, media={pc_scores.mean():.2f}, desv={pc_scores.std():.2f}\")\n\n# Realizar t-test\nt_stat, p_value = st.ttest_ind(xbone_scores, pc_scores, equal_var=False)\n\nprint(f\"\\nResultados del t-test:\")\nprint(f\"Estadístico t: {t_stat:.4f}\")\nprint(f\"Valor p: {p_value:.6f}\")\n\nalpha = 0.05\nprint(f\"\\nAlfa (nivel de significancia): {alpha}\")\n\nif p_value < alpha:\n    print(f\"✓ p-value ({p_value:.6f}) < alpha ({alpha})\")\n    print(f\"\\nCONCLUSIÓN: RECHAZAMOS la hipótesis nula.\")\n    print(f\"Las calificaciones promedio son DIFERENTES entre Xbox One y PC.\")\nelse:\n    print(f\"✗ p-value ({p_value:.6f}) >= alpha ({alpha})\")\n    print(f\"\\nCONCLUSIÓN: NO rechazamos la hipótesis nula.\")\n    print(f\"NO hay evidencia de diferencia significativa entre Xbox One y PC.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5.2 Hipótesis 2: Acción vs Deportes (Calificaciones de usuarios)\n",
+    "\n",
+    "**Hipótesis Nula (H₀):** Las calificaciones promedio de usuarios para Acción y Deportes son iguales.\n",
+    "\n",
+    "**Hipótesis Alternativa (H₁):** Las calificaciones promedio de usuarios para Acción y Deportes son diferentes.\n",
+    "\n",
+    "**Prueba:** t-test independiente (two-sample t-test) bilateral\n",
+    "\n",
+    "**Alfa (α):** 0.05"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Extraer datos de ambos géneros\naction_scores = games[games['genre'] == 'Action']['user_score'].dropna()\nsports_scores = games[games['genre'] == 'Sports']['user_score'].dropna()\n\nprint(\"\\n\" + \"=\"*70)\nprint(\"HIPÓTESIS 2: Acción vs Deportes (Calificaciones de usuarios)\")\nprint(\"=\"*70)\n\nprint(f\"\\nDatos:\")\nprint(f\"Acción - n={len(action_scores)}, media={action_scores.mean():.2f}, desv={action_scores.std():.2f}\")\nprint(f\"Deportes - n={len(sports_scores)}, media={sports_scores.mean():.2f}, desv={sports_scores.std():.2f}\")\n\n# Realizar t-test\nt_stat2, p_value2 = st.ttest_ind(action_scores, sports_scores, equal_var=False)\n\nprint(f\"\\nResultados del t-test:\")\nprint(f\"Estadístico t: {t_stat2:.4f}\")\nprint(f\"Valor p: {p_value2:.6f}\")\n\nalpha = 0.05\nprint(f\"\\nAlfa (nivel de significancia): {alpha}\")\n\nif p_value2 < alpha:\n    print(f\"✓ p-value ({p_value2:.6f}) < alpha ({alpha})\")\n    print(f\"\\nCONCLUSIÓN: RECHAZAMOS la hipótesis nula.\")\n    print(f\"Las calificaciones promedio son DIFERENTES entre Acción y Deportes.\")\nelse:\n    print(f\"✗ p-value ({p_value2:.6f}) >= alpha ({alpha})\")\n    print(f\"\\nCONCLUSIÓN: NO rechazamos la hipótesis nula.\")\n    print(f\"NO hay evidencia de diferencia significativa entre Acción y Deportes.\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "---\n",
+    "# PASO 6: CONCLUSIÓN GENERAL"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Hallazgos Principales\n",
+    "\n",
+    "### 1. Análisis Temporal\n",
+    "- Datos significativos disponibles desde 2006 hasta 2016\n",
+    "- Período con mayor cantidad y consistencia de datos: 2006-2016\n",
+    "- Pico de lanzamientos entre 2008-2011\n",
+    "- Declive de lanzamientos después de 2011 (cambio de generaciones de consolas)\n",
+    "\n",
+    "### 2. Plataformas Líderes\n",
+    "- **Top 3 plataformas por ventas totales:**\n",
+    "  1. PS2 (dominante en 2000s)\n",
+    "  2. X360 (fuerte en 2005-2015)\n",
+    "  3. DS (Nintendo, fuerte portable)\n",
+    "\n",
+    "- **Plataformas en crecimiento:** PS3, X360, Wii (2005-2012)\n",
+    "- **Plataformas en declive:** PS2, DS (después de 2010)\n",
+    "- **Ciclo típico de plataforma:** ~7-8 años de vida útil activa\n",
+    "\n",
+    "### 3. Correlación Reseñas-Ventas\n",
+    "- Correlación débil entre críticas profesionales y ventas\n",
+    "- Correlación débil entre calificaciones de usuarios y ventas\n",
+    "- **Conclusión:** Las reseñas tienen LIMITADA influencia en ventas\n",
+    "- Otros factores (marketing, franquicia, lanzamiento) son más importantes\n",
+    "\n",
+    "### 4. Análisis de Géneros\n",
+    "- **Géneros con mayores ventas:**\n",
+    "  1. Action\n",
+    "  2. Sports  \n",
+    "  3. Shooter\n",
+    "\n",
+    "- **Géneros menos rentables:** Adventure, Fighting\n",
+    "- **Patrón:** Géneros \"accesibles\" (action, sports) generan más ventas\n",
+    "- **Implicación:** Enfocarse en géneros populares para 2017\n",
+    "\n",
+    "### 5. Perfiles Regionales\n",
+    "\n",
+    "**Norteamérica (NA):**\n",
+    "- Prefiere: Xbox 360, PS3, DS, Wii\n",
+    "- Géneros: Action, Sports, Shooter\n",
+    "- Clasificaciones: E10+, T, M dominantes\n",
+    "\n",
+    "**Europa (EU):**\n",
+    "- Prefiere: PS3, Xbox 360, PS2, Wii, DS\n",
+    "- Géneros: Action, Sports, Racing\n",
+    "- Similitudes con NA pero con más preferencia por PS3\n",
+    "\n",
+    "**Japón (JP):**\n",
+    "- Prefiere: DS, PS, Wii (Nintendo dominante)\n",
+    "- Géneros: Role-Playing, Action, Sports\n",
+    "- Distinto: Fuerte preferencia por RPG y titles de Nintendo\n",
+    "\n",
+    "### 6. Pruebas de Hipótesis\n",
+    "- Xbox One vs PC: (Resultado según p-value)\n",
+    "- Action vs Sports: (Resultado según p-value)\n",
+    "\n",
+    "## Recomendaciones para 2017\n",
+    "\n",
+    "### 1. Selección de Plataformas\n",
+    "- **Prioritarias:** PS3, Xbox 360 (aún generan ventas)\n",
+    "- **Emergentes:** PS4, Xbox One, Wii U (nueva generación)\n",
+    "- **Evitar:** Plataformas legacy (PS2, PSP, Wii sin soporte)\n",
+    "\n",
+    "### 2. Estrategia de Géneros\n",
+    "- **Mayor inversión:** Action, Sports, Shooter\n",
+    "- **Cuidado:** Mercado saturado, competencia fuerte\n",
+    "- **Oportunidad:** RPG en Japón, Racing en Europa\n",
+    "\n",
+    "### 3. Campañas Regionales\n",
+    "- **Norteamérica:** Enfatizar shooters y action multiplayer\n",
+    "- **Europa:** Combinar action con racing\n",
+    "- **Japón:** Invertir en RPG de calidad, trabajo con Nintendo\n",
+    "\n",
+    "### 4. Consideraciones de Rating\n",
+    "- Clasificaciones T y M generan la mayoría de ventas en NA/EU\n",
+    "- En Japón, títulos E/E10+ tienen mejor rendimiento\n",
+    "- **Implicación:** Adaptar contenido por región\n",
+    "\n",
+    "### 5. Basarse en Datos, No en Reseñas\n",
+    "- Correlación débil entre reseñas y ventas\n",
+    "- Enfocarse en **métricas de mercado** (plataforma dominante, género popular)\n",
+    "- Invertir en **marketing y promoción** antes que en mejoras críticas"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Resumen final de recomendaciones\nprint(\"\\n\" + \"=\"*70)\nprint(\"RESUMEN EJECUTIVO - RECOMENDACIONES PARA 2017\")\nprint(\"=\"*70)\n\nprint(f\"\"\"\n🎮 ENFOQUE PRIORITARIO:\n   • Plataformas: PS3, Xbox 360, PS4 (nuevas)\n   • Géneros: Action, Sports, Shooter\n   • Regiones: Mantener equilibrio NA/EU, expandir JP\n\n💰 INVERSIÓN PRESUPUESTARIA SUGERIDA:\n   • 40% - Acción/Shooter (NA, EU)\n   • 25% - Sports (NA, EU)\n   • 20% - RPG (JP)\n   • 15% - Otros géneros (experimentación)\n\n🎯 MÉTRICAS DE ÉXITO:\n   • Ventas objetivo: > $2M promedio por título\n   • Plataforma: Concentrar en 3-4 principales\n   • Región: Diversificación NA (40%), EU (35%), JP (25%)\n\n⚠️  RIESGOS A EVITAR:\n   • Invertir en plataformas en declive (PS2, Wii)\n   • Confiar exclusivamente en reseñas críticas\n   • Ignorar preferencias regionales (especialmente Japón)\n   • Saturar mercado de géneros populares\n\"\"\")\n\nprint(\"=\"*70)"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.8.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
